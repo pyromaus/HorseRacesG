@@ -37,11 +37,10 @@ contract HorseRaces is VRFConsumerBaseV2 {
         uint8 winOdds;
     }
 
-    mapping(uint horseId => Horse horse) private s_theStable;
-    uint8[] private s_horseCount; // 22
+    mapping(uint horseId => Horse horse) private s_theStable; // the current supply of race horses to bet on
     uint8 private s_activeHorseCount; // 7
     mapping(uint horseId => address[] betters) private s_betters;
-    // mapping(address gambler => uint betHorseId) private s_activeBets;
+    mapping(uint horseId => uint activeBets) private s_activeBetCount;
 
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
@@ -58,6 +57,7 @@ contract HorseRaces is VRFConsumerBaseV2 {
     address payable[] private s_recentWinners;
     uint private s_recentWinningHorse;
     RaceStatus private s_raceStatus;
+    uint private s_bettingPool;
 
     /** events */
     event EnteredRace(address indexed player);
@@ -100,11 +100,15 @@ contract HorseRaces is VRFConsumerBaseV2 {
         }
         s_betters[_pony].push(msg.sender);
         s_players.push(payable(msg.sender));
+        s_activeBetCount[SEQ_horseID] = s_activeBetCount[SEQ_horseID] + 1;
+        uint enterFeeLessOurCut = (msg.value * 19) / 20;
+        s_bettingPool += enterFeeLessOurCut;
+
         emit EnteredRace(msg.sender);
     }
 
     function startRace() public /*uint8 _horseCount*/ {
-        //s_activeHorseCount = _horseCount;
+
         uint requestId = i_vrfCoordinator.requestRandomWords(
             i_gasLane,
             i_subscriptionId,
@@ -119,37 +123,22 @@ contract HorseRaces is VRFConsumerBaseV2 {
         uint /*requestId*/,
         uint[] memory randomWords
     ) internal override {
-        // checks, effects, interactions
-        // checks/requires at the beginning. faster revert = less gas spent
-        // effects (our own contract)
-        // uint[] memory newRace;
-        // for (uint i = 0; i < s_activeHorseCount; i++) {
-        //     uint newContestantHorse = randomWords[i] % s_horseCount.length;
-        //     newRace.push(newContestantHorse);
-        // }
+        
         uint indexOfWinner = randomWords[0] % SEQ_horseID;
-        //s_recentWinningHorse = indexOfWinner;
-        // address payable winner = s_players[indexOfWinner];
-        //s_recentWinners = payable(s_betters[s_recentWinningHorse]);
-        //s_raceStatus = RaceStatus.OPEN;
-        //s_players = new address payable[](0);
-        //s_latestTimestamp = block.timestamp;
+       
         emit WinnerPicked(indexOfWinner);
         finalizeRace(indexOfWinner);
     }
 
     function finalizeRace(uint _indexOfWinner) internal {
-        //uint randomNumber = 6;
-        //uint winnerHorseId = s_theStable[randomNumber].horseId;
-        s_recentWinners = new address payable[](0);
+
         s_recentWinningHorse = s_theStable[_indexOfWinner].horseId;
-        uint winningPortion = address(this).balance /
-            s_betters[_indexOfWinner].length;
+        uint winningPortion = s_bettingPool / s_betters[_indexOfWinner].length;
         for (uint i = 0; i < s_betters[_indexOfWinner].length; i++) {
             address payee = s_betters[_indexOfWinner][i];
             s_recentWinners.push(payable(payee));
         }
-        s_players = new address payable[](0);
+
         s_latestTimestamp = block.timestamp;
         for (uint i = 0; i < s_betters[_indexOfWinner].length; i++) {
             (bool success, ) = s_betters[_indexOfWinner][i].call{
@@ -159,7 +148,15 @@ contract HorseRaces is VRFConsumerBaseV2 {
                 revert HorseRaces__TransferFailed();
             }
         }
-        s_betters[_indexOfWinner] = new address payable[](0);
+        s_raceStatus = RaceStatus.OPEN;
+    }
+
+    function resetRace() public {
+        for (uint i = 0; i < SEQ_horseID; i++) {
+            s_betters[i + 1] = new address[](0);
+        }
+        s_recentWinners = new address payable[](0);
+        s_players = new address payable[](0);
     }
 
     /** getters */
@@ -188,6 +185,18 @@ contract HorseRaces is VRFConsumerBaseV2 {
         return s_recentWinningHorse;
     }
 
+    function getHorseCount() external view returns (uint) {
+        return SEQ_horseID;
+    }
+
+    function getActiveBetCount(uint _pony) external view returns (uint) {
+        return s_activeBetCount[_pony];
+    }
+
+    function getBettingPool() external view returns (uint) {
+        return s_bettingPool;
+    }
+
     function getRecentWinners()
         external
         view
@@ -196,8 +205,8 @@ contract HorseRaces is VRFConsumerBaseV2 {
         return s_recentWinners;
     }
 
-    function getPlayersLength() external view returns (uint8) {
-        return uint8(s_players.length);
+    function getPlayersLength() external view returns (uint) {
+        return s_players.length;
     }
 
     function getLastTimestamp() external view returns (uint) {

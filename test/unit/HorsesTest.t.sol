@@ -184,7 +184,7 @@ contract HorsesTest is Test {
 
     modifier raceEnteredAndTimePassed() {
         vm.prank(PLAYER);
-        wranglerUnit.placeBet{value: enterFee}(horse3);
+        wranglerUnit.placeBet{value: enterFee}(horse1);
         vm.warp(block.timestamp + interval + 1);
         vm.roll(block.number + 1);
         _;
@@ -230,9 +230,11 @@ contract HorsesTest is Test {
         uint additionalEntrants = 3;
         uint startingIndex = 1; // some more horses
 
+        console.log("1st addy balance before payout: ", PLAYER.balance);
+
         for (
             uint i = startingIndex;
-            i < startingIndex + additionalEntrants + 1;
+            i < startingIndex + additionalEntrants;
             i++
         ) {
             address player = address(uint160(i));
@@ -240,7 +242,9 @@ contract HorsesTest is Test {
             wranglerUnit.placeBet{value: enterFee}(i); // they all enter
         }
 
-        uint balanceB4Payout = address(this).balance;
+        uint balanceB4Payout = wranglerUnit.getBettingPool();
+        uint balance2 = address(this).balance;
+
         vm.recordLogs();
         wranglerUnit.performUpkeep("");
         Vm.Log[] memory entries = vm.getRecordedLogs();
@@ -257,15 +261,49 @@ contract HorsesTest is Test {
 
         uint winningHorse = wranglerUnit.getWinningHorseID();
         uint betterCount = wranglerUnit.getBetters(winningHorse).length;
+
+        for (uint i = 0; i < wranglerUnit.getHorseCount(); i++) {
+            address[] memory betters = wranglerUnit.getBetters(i + 1);
+            console.log("Betters for Horse #", i + 1);
+            for (uint x = 0; x < betters.length; x++) {
+                console.log(betters[x]);
+            }
+        }
+        console.log("Balance of address(this) lol: ", balance2);
+        console.log("Winning Horse ID: ", winningHorse);
+        console.log("This horse had this many bets: ", betterCount);
+        console.log("Players length: ", wranglerUnit.getPlayersLength());
+        console.log("Winning Bettors: ");
+        for (uint i = 0; i < wranglerUnit.getRecentWinners().length; i++) {
+            console.log(wranglerUnit.getRecentWinners()[i]);
+        }
+        console.log(wranglerUnit.getWinningHorseID());
+
         uint payout = balanceB4Payout / betterCount;
 
         assert(uint(wranglerUnit.getRaceStatus()) == 0);
         //assert(wranglerUnit.getRecentWinner() != address(0));
-        assert(wranglerUnit.getPlayersLength() == 0);
+        //assert(wranglerUnit.getPlayersLength() == 0);
         assert(previousTimestamp < wranglerUnit.getLastTimestamp());
-        assert(
-            wranglerUnit.getRecentWinners()[0].balance ==
-                STARTINGUSERBALANCE + payout - enterFee
+        console.log(
+            "Balance of 1st winner: ",
+            wranglerUnit.getRecentWinners()[0].balance
         );
+        console.log(
+            "Balance of 2nd: ",
+            wranglerUnit.getRecentWinners()[1].balance
+        );
+        console.log("Balance of contract: ", address(wranglerUnit).balance);
+        for (uint i = 0; i < wranglerUnit.getRecentWinners().length; i++) {
+            assert(
+                wranglerUnit.getRecentWinners()[i].balance ==
+                    STARTINGUSERBALANCE + payout - enterFee
+            );
+        }
+
+        wranglerUnit.resetRace();
+        //assert(wranglerUnit.getBetters(1)[0] == address(0));
+        //assert(wranglerUnit.getRecentWinners()[0] == address(0));
+        assert(wranglerUnit.getPlayersLength() == 0);
     }
 }

@@ -36,15 +36,15 @@ contract HorseRaces is VRFConsumerBaseV2 {
         uint8 winOdds;
     }
 
-    // win odds are not yet implemented in the calculation of the winner
+    /* win odds are not yet implemented in the calculation of the winner */
 
-    mapping(uint horseId => Horse horse) private s_theStable; // the current supply of race horses to bet on
+    mapping(uint horseId => Horse horse) private s_theStable; /* the current supply of race horses to bet on */
     mapping(uint horseId => address[] betters) private s_betters;
     mapping(uint horseId => uint activeBets) private s_activeBetCount;
 
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
-    uint public SEQ_horseID = 0; // horse id starting at 0, becomes 1 when first horse is conjured
+    uint public SEQ_horseID = 0; /* horse id starting at 0, becomes 1 when first horse is conjured */
 
     uint private immutable i_enterFee;
     uint private immutable i_interval;
@@ -59,7 +59,6 @@ contract HorseRaces is VRFConsumerBaseV2 {
     RaceStatus private s_raceStatus;
     uint private s_bettingPool;
 
-    /** events */
     event EnteredRace(address indexed player);
     event WinnerPicked(uint indexed pony);
     event RequestedRaceRandomness(uint indexed requestId);

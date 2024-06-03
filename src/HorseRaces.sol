@@ -13,7 +13,7 @@ import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interface
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 
 contract HorseRaces is VRFConsumerBaseV2 {
-    /** errors */
+    
     error HorseRaces__NotEnoughETH();
     error HorseRaces__TenHorseMinimum();
     error HorseRaces__TooEarly();
@@ -25,7 +25,6 @@ contract HorseRaces is VRFConsumerBaseV2 {
         uint raceStatus
     );
 
-    /** type dec */
     enum RaceStatus {
         OPEN,
         CALCULATING
@@ -37,14 +36,15 @@ contract HorseRaces is VRFConsumerBaseV2 {
         uint8 winOdds;
     }
 
+    // win odds are not yet implemented in the calculation of the winner
+
     mapping(uint horseId => Horse horse) private s_theStable; // the current supply of race horses to bet on
-    uint8 private s_activeHorseCount; // 7
     mapping(uint horseId => address[] betters) private s_betters;
     mapping(uint horseId => uint activeBets) private s_activeBetCount;
 
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
-    uint public SEQ_horseID = 0;
+    uint public SEQ_horseID = 0; // horse id starting at 0, becomes 1 when first horse is conjured
 
     uint private immutable i_enterFee;
     uint private immutable i_interval;
@@ -91,6 +91,8 @@ contract HorseRaces is VRFConsumerBaseV2 {
         return SEQ_horseID;
     }
 
+    /* conjures a horse to participate in the races, with a horse ID, name, and win odds */
+
     function placeBet(uint _pony) public payable {
         if (msg.value < i_enterFee) {
             revert HorseRaces__NotEnoughETH();
@@ -107,8 +109,14 @@ contract HorseRaces is VRFConsumerBaseV2 {
         emit EnteredRace(msg.sender);
     }
 
-    function startRace() public /*uint8 _horseCount*/ {
+    /* called by the user to place a bet on a horse, takes horse ID as input
+    they must send at least the enter fee
+    s_betters : mapping of each horse's bettors
+    horse race contract keeps 5% of entrance fees */
 
+    function startRace() public /*uint8 _horseCount*/ {
+        
+        s_raceStatus = RaceStatus.CALCULATING;
         uint requestId = i_vrfCoordinator.requestRandomWords(
             i_gasLane,
             i_subscriptionId,
@@ -118,6 +126,9 @@ contract HorseRaces is VRFConsumerBaseV2 {
         );
         emit RequestedRaceRandomness(requestId);
     }
+
+    /* called by user or can be called at a predefined interval
+    requests a random number, race is not open at this time */
 
     function fulfillRandomWords(
         uint /*requestId*/,
@@ -129,6 +140,9 @@ contract HorseRaces is VRFConsumerBaseV2 {
         emit WinnerPicked(indexOfWinner);
         finalizeRace(indexOfWinner);
     }
+
+    /* called by chainlink node
+    index of winning horse is calculated */
 
     function finalizeRace(uint _indexOfWinner) internal {
 
@@ -151,6 +165,9 @@ contract HorseRaces is VRFConsumerBaseV2 {
         s_raceStatus = RaceStatus.OPEN;
     }
 
+    /* payouts are calculated and sent, recent winners are updated
+    payout = entire contract balance minus 5%, divided by number of bets on the horse */
+
     function resetRace() public {
         for (uint i = 0; i < SEQ_horseID; i++) {
             s_betters[i + 1] = new address[](0);
@@ -158,6 +175,8 @@ contract HorseRaces is VRFConsumerBaseV2 {
         s_recentWinners = new address payable[](0);
         s_players = new address payable[](0);
     }
+
+    /* resets the bets list */
 
     /** getters */
 
